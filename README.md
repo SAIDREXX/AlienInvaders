@@ -16,7 +16,7 @@ Este es un emocionante videojuego escrito en LUA y desarrollado con LOVE2D. La e
 1. Clona el repositorio:
 
    ```bash
-   git clone https://github.com/tuusuario/space-invaders-game.git
+   https://github.com/SAIDREXX/AlienInvaders.git
 
 2. Descarga LOVE2D 🩷:
    
