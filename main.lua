@@ -35,6 +35,7 @@ local obstacleImages = { "assets/enemies/helicopter.png", "assets/enemies/ship.p
 
 
 local gamePaused = false
+local noFuel = false
 local gameState = "playing"
 local playerLives = 3
 local playerScore = 0
@@ -42,14 +43,13 @@ local playerMaxScore = 0
 local maxShots = 10
 local activeShots = 0
 
-local fuelBarWidth = 200
 local fuelBarHeight = 20
-local fuelBarMax = 100
+local fuelBarMax = 180
 local fuelBar = fuelBarMax
 local fuelBarDecreaseRate = 5  -- Puedes ajustar la velocidad de disminución
-local fuelRefillAmount = 20     -- Puedes ajustar la cantidad de recarga
+local fuelRefillAmount = 15     -- Puedes ajustar la cantidad de recarga
 local fuelSpawnTimer = 0
-local fuelSpawnInterval = 10   -- Intervalo en segundos entre generación de botes de combustible
+local fuelSpawnInterval = 10  -- Intervalo en segundos entre generación de botes de combustible
 
 
 
@@ -76,6 +76,7 @@ function love.load()
     crashSound = love.audio.newSource("assets/sounds/crash.mp3", "static")
     hitSound = love.audio.newSource("assets/sounds/crash.mp3", "static")
     soundTrack = love.audio.newSource("assets/sounds/main.mp3", "static")
+    fuelSpawnInterval = math.random(6, 10)
 
     love.window.setMode(WINDOW_WIDTH, WINDOW_HEIGHT, {
         fullscreen = false,
@@ -85,6 +86,8 @@ function love.load()
 end
 
 function love.update(dt)
+    fuelBarDecreaseRate = 5
+    fuelSpawnInterval = math.random(5, 10)
     if not gamePaused then
         -- Actualizar jugador
         soundTrack:setLooping(true)
@@ -105,15 +108,54 @@ function love.update(dt)
         fuelBar = fuelBar - fuelBarDecreaseRate * dt
 
         if fuelBar <= 0 then
-            fuelBar = 0
-            -- Aquí puedes agregar el código para manejar el agotamiento del combustible
-            -- Por ejemplo, detener el juego, reiniciar la posición del jugador, etc.
+            playerLives = playerLives - 1
+            noFuel = true
+        
+            if playerLives <= 0 then
+                soundTrack:stop()
+                deathSound:play()
+                gameState = "gameover"
+                noFuel = false
+            else
+                player.x = 600
+                player.y = 600
+        
+                -- Limpiar las listas de obstáculos y disparos
+                obstacles = {}
+                specialObstacles = {}
+                shots = {}
+        
+                -- Reiniciar el contador de disparos activos
+                activeShots = 0
+                gameState = "noFuel"
+            end
+            fuelBar = fuelBarMax
+            fuelBarDecreaseRate = 0
         end
+    end
 
+    -- Implementación de pausa
+    if love.keyboard.isDown("p") then
+        if not pauseKeyPressed then
+            pauseKeyPressed = true
+            gamePaused = not gamePaused
+
+            if gamePaused then
+                soundTrack:pause()
+            else
+                soundTrack:play()
+            end
+        end
+    else
+        pauseKeyPressed = false
     end
 end
 
+
+
+
 function love.draw()
+
     -- Dibujar el fondo
     love.graphics.draw(background.image, 0, -background.y, 0, background.scale, background.scale)
     -- Dibujar jugador
@@ -129,6 +171,12 @@ function love.draw()
         love.graphics.draw(shot.image, shot.x, shot.y, 0, shot.scale, shot.scale)
     end
 
+    for _, fuel in ipairs(specialObstacles) do
+        love.graphics.draw(fuel.image, fuel.x, fuel.y, 0, fuel.scale, fuel.scale)
+    end
+
+    
+
     
 
     if gameState == "playing" then
@@ -138,6 +186,12 @@ function love.draw()
         love.graphics.print("Vidas: " .. playerLives, 10, 90)
         love.graphics.print("Puntuación: " .. playerScore, 10, 10)
         love.graphics.print("Puntuación máxima: " .. playerMaxScore, 10, 50)
+
+        -- Dibujar la barra de combustible
+        love.graphics.print("Combustible: ", VIRTUAL_WIDTH - 100, 10)
+        love.graphics.rectangle("fill", VIRTUAL_WIDTH + 60, 22, fuelBar, fuelBarHeight)
+        
+
     end
     
 
@@ -148,12 +202,31 @@ function love.draw()
         love.graphics.printf("Game Over", 0, WINDOW_HEIGHT / 2 - 30, WINDOW_WIDTH - 30, "center")
         love.graphics.printf("Presiona Enter para reiniciar", 0, WINDOW_HEIGHT / 2, WINDOW_WIDTH, "center")
     end
+
+    if noFuel then
+        local font = love.graphics.newFont("fonts/Kanit/Kanit.ttf", 36) 
+        love.graphics.setFont(font)
+        love.graphics.printf("¡Te quedaste sin combustible!", 0, WINDOW_HEIGHT / 2 - 30, WINDOW_WIDTH - 30, "center")
+        love.graphics.printf("Presiona Enter para reiniciar", 0, WINDOW_HEIGHT / 2, WINDOW_WIDTH, "center")
+    end
+
+    if gamePaused then
+        -- Dibujar un mensaje de pausa en la pantalla
+        local font = love.graphics.newFont("fonts/Kanit/Kanit.ttf", 36) 
+        love.graphics.setFont(font)
+        love.graphics.printf("Juego Pausado", 0, WINDOW_HEIGHT / 2 - 30, WINDOW_WIDTH - 30, "center")
+    end
 end
 
 function movePlayer(dt)
     if gameState == "gameover" then
         return  -- No actualizar la posición de la nave en el estado "gameover"
     end
+
+    if gameState == "noFuel" then
+        return
+    end
+
     if love.keyboard.isDown("up") and player.y > 0 then
         player.y = player.y - player.speed * dt
     elseif love.keyboard.isDown("down") and player.y < love.graphics.getHeight() - player.image:getHeight() * player.scale then
@@ -172,6 +245,10 @@ local maxObstacles = 8
 
 function generateObstacles(dt)
     if gameState == "gameover" then
+        return
+    end
+
+    if gameState == "noFuel" then
         return
     end
 
@@ -194,6 +271,13 @@ function generateObstacles(dt)
 end
 
 function generateFuel(dt)
+    if gameState == "gameover" then
+        return
+    end
+
+    if gameState == "noFuel" then
+        return
+    end
     -- Generar botes de combustible
     fuelSpawnTimer = fuelSpawnTimer + dt
 
@@ -203,7 +287,7 @@ function generateFuel(dt)
             y = -fuelBarHeight,  -- Para que aparezca justo arriba de la pantalla
             width = fuelBarWidth,
             height = fuelBarHeight,
-            image = love.graphics.newImage("assets/fuel.png"),  -- Reemplaza con la ruta correcta
+            image = love.graphics.newImage("assets/general/fuel.png"),  -- Reemplaza con la ruta correcta
             scale = 0.1,
         }
         table.insert(specialObstacles, fuel)
@@ -233,6 +317,7 @@ function moveObstacles(dt)
     if gameState == "gameover" then
         -- Eliminar todos los obstáculos
         obstacles = {}
+        specialObstacles = {}
         return
     end
     for i = #obstacles, 1, -1 do
@@ -262,6 +347,7 @@ function checkCollisions()
             crashSound:play()
 
             playerLives = playerLives - 1
+            fuelBar = fuelBarMax
             print("¡Colisión con nave enemiga! Vidas restantes: " .. playerLives)
 
             -- Verificar si el jugador se quedó sin vidas
@@ -310,42 +396,64 @@ function checkShotCollisions()
 end
 
 function love.keypressed(key)
-    if key == "return" and gameState == "gameover" then
-        if playerScore > playerMaxScore then
-            playerMaxScore = playerScore  -- Actualizar la puntuación máxima si es necesario
-        end
-        -- Reiniciar el juego
-        playerLives = 3
-        playerScore = 0
-        gameState = "playing"
+    if not gamePaused then
+        if key == "return" then
+            if gameState == "gameover" then
+                if playerScore > playerMaxScore then
+                    playerMaxScore = playerScore  -- Actualizar la puntuación máxima si es necesario
+                end
+                -- Reiniciar el juego
+                playerLives = 3
+                playerScore = 0
+                gameState = "playing"
 
-        -- Reiniciar la posición del jugador
-        player.x = 600
-        player.y = 600
+                -- Reiniciar la posición del jugador
+                player.x = 600
+                player.y = 600
 
-        -- Limpiar las listas de obstáculos y disparos
-        obstacles = {}
-        shots = {}
-        
-        -- Reiniciar el contador de disparos activos
-        activeShots = 0
-    elseif key == "space" and gameState == "playing" then
-        -- Disparar solo si no hemos alcanzado el límite de disparos
-        if activeShots < maxShots then
-            shotSound:stop()
-            local shot = {
-                x = player.x + player.image:getWidth() * player.scale / 4 - shotWidth / 2,
-                y = player.y,
-                image = shotImage,
-                scale = 0.06
-            }
-            table.insert(shots, shot)
-            shotSound:play()
-            
-            activeShots = activeShots + 1  -- Aumentar el contador de disparos activos
+                -- Limpiar las listas de obstáculos y disparos
+                obstacles = {}
+                shots = {}
+                
+                -- Reiniciar el contador de disparos activos
+                activeShots = 0
+            elseif gameState == "playing" then
+                
+            elseif gameState == "noFuel" then
+                gameState = "playing"
+                fuelBarDecreaseRate = 5
+                -- Reiniciar la posición del jugador
+                player.x = 600
+                player.y = 600
+
+                -- Limpiar las listas de obstáculos y disparos
+                obstacles = {}
+                specialObstacles = {}
+                shots = {}
+                
+                -- Reiniciar el contador de disparos activos
+                activeShots = 0
+                noFuel = false
+            end
+        elseif key == "space" and gameState == "playing" then
+            -- Disparar solo si no hemos alcanzado el límite de disparos
+            if activeShots < maxShots then
+                shotSound:stop()
+                local shot = {
+                    x = player.x + player.image:getWidth() * player.scale / 4 - shotWidth / 2,
+                    y = player.y,
+                    image = shotImage,
+                    scale = 0.06
+                }
+                table.insert(shots, shot)
+                shotSound:play()
+                
+                activeShots = activeShots + 1  -- Aumentar el contador de disparos activos
+            end
         end
     end
 end
+
 
 
 
