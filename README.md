@@ -21,8 +21,8 @@ Este es un emocionante videojuego escrito en LUA y desarrollado con LOVE2D. La e
 2. Descarga LOVE2D 🩷:
    
    ```bash
-     sudo apt-get install love
-      
+   sudo apt-get install love
+   
 3. Descarga de LOVE2D en Windows💻:
 
    ### [Página Oficial de LOVE2D](https://love2d.org)
