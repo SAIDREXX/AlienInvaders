@@ -1,4 +1,4 @@
-# Space Invaders Game
+# Alien Invaders Game
 
 ¡Bienvenido/a a Alien Invaders Game! 🚀👾
 
